@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runner-docker
+  labels: &DeploymentLabels
+    io.taask/component: runner-docker
+spec:
+  selector:
+    matchLabels: *DeploymentLabels
+  replicas: {{ .Values.Count }}
+  strategy:
+    type: Recreate
+  # Pod:
+  template:
+    metadata:
+      labels: *DeploymentLabels
+    spec:
+      containers:
+      - name: runner-docker
+        image: taask/runner-docker:{{ .Values.Tag }}
+        command: ["/taask/runner-docker"]
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+        - mountPath: /root/.taask/runner/config
+          name: taask-config
+        - mountPath: /root/.taask/runner/data
+          name: taask-data
+        - mountPath: /var/run/docker.sock
+          name: docker-sock
+        env:
+          - name: TAASK_HOST_HOMEDIR
+            value: {{ .Values.HomeDir }}
+        # args: []
+      volumes:
+      - name: taask-config
+        hostPath:
+          # directory location on host
+          path: {{ .Values.HomeDir }}/.taask/runner/config
+          type: Directory
+      - name: taask-data
+        hostPath:
+          # directory location on host
+          path: {{ .Values.HomeDir }}/.taask/runner/data
+          type: Directory
+      - name: docker-sock
+        hostPath:
+          # directory location on host
+          path: /var/run/docker.sock
