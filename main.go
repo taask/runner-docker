@@ -14,7 +14,7 @@ const (
 	imageAnnotation = "io.taask.container.image"
 )
 
-var serverHost = flag.String("host", "taask-server", "host for taask-server")
+var serverHost = flag.String("host", "taask-server-internal", "host for taask-server")
 var serverPort = flag.String("port", "3687", "port for taask-server")
 
 func main() {

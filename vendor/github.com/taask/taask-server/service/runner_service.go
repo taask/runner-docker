@@ -40,24 +40,17 @@ type RunnerService struct {
 }
 
 // AuthRunner allows a runner to advertise itself and perform auth with the server
-func (rs *RunnerService) AuthRunner(ctx context.Context, req *AuthMemberRequest) (*AuthMemberResponse, error) {
+func (rs *RunnerService) AuthRunner(ctx context.Context, attempt *auth.Attempt) (*auth.AttemptResponse, error) {
 	defer log.LogTrace("AuthRunner")()
-
-	attempt := &auth.Attempt{
-		MemberUUID:  req.UUID,
-		GroupUUID:   auth.DefaultGroupUUID,
-		PubKey:      req.PubKey,
-		AuthHashSig: req.AuthHashSignature,
-		Timestamp:   req.Timestamp,
-	}
 
 	encRunnerChallenge, err := rs.Manager.AttemptRunnerAuth(attempt)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &AuthMemberResponse{
+	resp := &auth.AttemptResponse{
 		EncChallenge: encRunnerChallenge.EncSessionChallenge,
+		MasterPubKey: rs.Manager.GetMasterRunnerPubKey(),
 	}
 
 	return resp, nil
@@ -126,7 +119,7 @@ func (rs *RunnerService) RegisterRunner(req *RegisterRunnerRequest, stream Runne
 			log.LogError(errors.Wrap(err, "failed to stream.Send"))
 
 			if task.UUID != "" {
-				rs.Manager.Updater.UpdateTask(update) // persist the queued update so that the task goes waiting -> queued -> retrying
+				rs.Manager.UpdateTask(update) // persist the queued update so that the task goes waiting -> queued -> retrying
 				log.LogInfo(fmt.Sprintf("task %s is dead, a retry worker should be started for it", task.UUID))
 			}
 
@@ -134,7 +127,7 @@ func (rs *RunnerService) RegisterRunner(req *RegisterRunnerRequest, stream Runne
 		}
 
 		if task.UUID != "" {
-			rs.Manager.Updater.UpdateTask(update)
+			rs.Manager.UpdateTask(update)
 		}
 	}
 
@@ -155,7 +148,7 @@ func (rs *RunnerService) UpdateTask(ctx context.Context, req *UpdateTaskRequest)
 		return &Empty{}, nil
 	}
 
-	rs.Manager.Updater.UpdateTask(*req.Update)
+	rs.Manager.UpdateTask(*req.Update)
 
 	return &Empty{}, nil
 }

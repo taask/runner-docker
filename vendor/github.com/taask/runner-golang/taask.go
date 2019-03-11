@@ -147,8 +147,8 @@ func (r *Runner) authenticate(localAuth *cconfig.LocalAuthConfig) error {
 		return errors.Wrap(err, "failed to Sign")
 	}
 
-	attempt := &service.AuthMemberRequest{
-		UUID:              memberUUID,
+	attempt := &auth.Attempt{
+		MemberUUID:        memberUUID,
 		GroupUUID:         r.localAuth.MemberGroup.UUID,
 		PubKey:            keypair.SerializablePubKey(),
 		AuthHashSignature: authHashSig,

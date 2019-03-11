@@ -37,10 +37,6 @@
   branch = "master"
   name = "github.com/taask/runner-golang"
 
-[[constraint]]
-  branch = "master"
-  name = "github.com/taask/taask-server"
-
 [prune]
   go-tests = true
   unused-packages = true

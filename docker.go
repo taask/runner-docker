@@ -58,6 +58,8 @@ func runDockerImageWithTask(image string, task *taask.DecryptedTask) ([]byte, er
 		return nil, errors.Wrap(err, "failed to writeTaskBodyToTmpDir")
 	}
 
+	// TODO: delete data after task is complete
+
 	vol := volumeStringForUUID(task.UUID)
 	cmd := exec.Command("docker", "run", "-v", vol, image)
 

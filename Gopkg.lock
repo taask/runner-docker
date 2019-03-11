@@ -118,18 +118,18 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:57452b26e7572f5d747f6c03bc6c983677db869f82d0324e237851767f710a37"
+  digest = "1:dafb88ba32b5dfe377661d65c309cbab8720cbb32cc9660bb9b166abdbc73033"
   name = "github.com/taask/runner-golang"
   packages = [
     ".",
     "config",
   ]
   pruneopts = "UT"
-  revision = "8edf198fb8d41b590c232edd6ff5dadee4ccf5cb"
+  revision = "7ae2a7dbb38f9d79df5720b5305cb363a673a070"
 
 [[projects]]
   branch = "master"
-  digest = "1:bb2f8e0fce7a9b1ea70f9d1ddec2488fc22076c4a492c4a29f1142d1291801b9"
+  digest = "1:f5604545d8c345163e0d9e8b87790f84ed5d2711cec3b37ac2672a2544452cea"
   name = "github.com/taask/taask-server"
   packages = [
     "auth",
@@ -138,13 +138,15 @@
     "metrics",
     "model",
     "model/validator",
+    "partner",
     "schedule",
     "service",
     "storage",
+    "timeout",
     "update",
   ]
   pruneopts = "UT"
-  revision = "f7e9e5bfa2da2b62a160e540fc6c115fa92885c2"
+  revision = "d7f2dfa0eefbca2dacc49351ee04507635e732fa"
 
 [[projects]]
   branch = "master"

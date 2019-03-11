@@ -1,6 +1,9 @@
 package brain
 
 import (
+	"fmt"
+	"math/rand"
+
 	"github.com/pkg/errors"
 	"github.com/taask/taask-server/model"
 	"github.com/taask/taask-server/model/validator"
@@ -16,8 +19,22 @@ func (m *Manager) ScheduleTask(task *model.Task) (string, error) {
 	task.Status = ""      // clear this in case it was set
 	task.Meta.Version = 0 // set this to 0
 	if task.Meta.TimeoutSeconds == 0 {
-		task.Meta.TimeoutSeconds = 600 // 10m default
+		task.Meta.TimeoutSeconds = 600 // 10m default; TODO: make this configurable
 	}
+
+	if partnerUUID := m.partnerManager.HealthyPartnerUUID(); partnerUUID != "" {
+		randomizer := rand.Intn(100)
+
+		if randomizer < 50 {
+			task.Meta.PartnerUUID = m.partnerManager.UUID
+		} else {
+			task.Meta.PartnerUUID = partnerUUID
+		}
+	} else {
+		task.Meta.PartnerUUID = m.partnerManager.UUID
+	}
+
+	fmt.Println(fmt.Sprintf("adding task with PartnerUUID %s, mine is %s", task.Meta.PartnerUUID, m.partnerManager.UUID))
 
 	if err := m.storage.Add(*task); err != nil {
 		return "", errors.Wrap(err, "failed to storage.Add")
@@ -29,9 +46,12 @@ func (m *Manager) ScheduleTask(task *model.Task) (string, error) {
 		return "", errors.Wrap(err, "failed to task.Update")
 	}
 
-	m.Updater.UpdateTask(update)
+	m.UpdateTask(update)
 
-	go m.scheduler.ScheduleTask(task)
+	// only schedule the task if we own it
+	if task.Meta.PartnerUUID == "" || task.Meta.PartnerUUID == m.partnerManager.UUID {
+		go m.scheduler.ScheduleTask(task)
+	}
 
 	return task.UUID, nil
 }
@@ -43,15 +63,20 @@ func (m *Manager) GetTask(uuid string) (*model.Task, error) {
 
 // UpdateTask applies a task update from a runner
 func (m *Manager) UpdateTask(update model.TaskUpdate) error {
-	if update.RunnerUUID != "" {
-		return errors.New("RunnerUUID is immutable")
-	}
-
 	if update.RetrySeconds != 0 {
 		return errors.New("RetrySeconds is immutable")
 	}
 
-	m.Updater.UpdateTask(update)
+	task := m.updater.UpdateTask(update)
+
+	if task != nil {
+		go m.partnerManager.AddTaskForUpdate(*task)
+	}
 
 	return nil
+}
+
+// GetTaskUpdateListener gets an update listener for a task
+func (m *Manager) GetTaskUpdateListener(uuid string) chan model.Task {
+	return m.updater.GetListener(uuid)
 }
