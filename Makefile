@@ -37,3 +37,7 @@ runner/docker/sandbox/push:
 
 runner/docker/echo/build:
 	docker build $(runnerdockerpath)/ops/echo -t taask/echo
+
+deps/update/runner-docker:
+	dep ensure --update github.com/taask/runner-golang
+	dep ensure --update github.com/taask/taask-server

@@ -226,14 +226,21 @@ func (r *Runner) run() error {
 }
 
 func (r *Runner) runTask(task *model.Task) {
-	// set task status to active
+	// set task status to running
 	// sendUpdate calls task.Update, so have to do this synchronously
-	if err := r.sendUpdate(task, nil, nil, nil); err != nil {
+	updatedTask, err := r.sendUpdate(task, nil, nil, nil)
+	if err != nil {
 		log.LogError(errors.Wrap(err, "failed to sendUpdate"))
 		return
 	}
 
-	taskKeyJSON, err := r.localAuth.ActiveSession.Keypair.Decrypt(task.Meta.RunnerEncTaskKey)
+	encTaskKey := updatedTask.GetEncTaskKey(r.localAuth.ActiveSession.Keypair.KID)
+	if encTaskKey == nil {
+		log.LogError(fmt.Errorf("task did not include encTaskKey with KID %s", r.localAuth.ActiveSession.Keypair.KID))
+		return
+	}
+
+	taskKeyJSON, err := r.localAuth.ActiveSession.Keypair.Decrypt(encTaskKey)
 	if err != nil {
 		log.LogError(errors.Wrap(err, "failed to Decrypt task key"))
 		return
@@ -245,7 +252,7 @@ func (r *Runner) runTask(task *model.Task) {
 		return
 	}
 
-	taskBodyJSON, err := taskKey.Decrypt(task.EncBody)
+	taskBodyJSON, err := taskKey.Decrypt(updatedTask.EncBody)
 	if err != nil {
 		log.LogError(errors.Wrap(err, "failed to Decrypt task body"))
 		return
@@ -257,7 +264,7 @@ func (r *Runner) runTask(task *model.Task) {
 		result, handlerErr = r.handler(taskBodyJSON)
 	} else if r.specHandler != nil {
 		decryptedTask := DecryptedTask{
-			Task: *task,
+			Task: *updatedTask,
 			Body: taskBodyJSON,
 		}
 
@@ -268,68 +275,69 @@ func (r *Runner) runTask(task *model.Task) {
 	}
 
 	if handlerErr != nil {
-		// sendUpdate calls task.Update
-		if err := r.sendUpdate(task, taskKey, nil, handlerErr); err != nil {
+		_, err := r.sendUpdate(updatedTask, taskKey, nil, handlerErr)
+		if err != nil {
 			log.LogError(errors.Wrap(err, "failed to sendUpdate"))
 		}
 
 		return
 	}
 
-	// sendUpdate calls task.Update... just making sure you know.
-	if err := r.sendUpdate(task, taskKey, result, nil); err != nil {
+	_, err = r.sendUpdate(updatedTask, taskKey, result, nil)
+	if err != nil {
 		log.LogError(errors.Wrap(err, "failed to sendUpdate"))
 	}
 }
 
-func (r *Runner) sendUpdate(task *model.Task, taskKey *simplcrypto.SymKey, result interface{}, taskErr error) error {
-	update := model.TaskUpdate{}
+func (r *Runner) sendUpdate(task *model.Task, taskKey *simplcrypto.SymKey, result interface{}, taskErr error) (*model.Task, error) {
+	changes := model.TaskChanges{}
 
 	if result == nil && taskErr == nil {
-		update.Status = model.TaskStatusRunning
+		changes.Status = model.TaskStatusRunning
 	} else {
 		var encResult *simplcrypto.Message
 
 		if result == nil && taskErr != nil {
-			update.Status = model.TaskStatusFailed
+			changes.Status = model.TaskStatusFailed
 
 			var err error
 			encResult, err = taskKey.Encrypt([]byte(taskErr.Error()))
 			if err != nil {
-				return errors.Wrap(err, "failed to Encrypt error result")
+				return nil, errors.Wrap(err, "failed to Encrypt error result")
 			}
 		} else if result != nil && taskErr == nil {
-			update.Status = model.TaskStatusCompleted
+			changes.Status = model.TaskStatusCompleted
 
 			resultJSON, err := json.Marshal(result)
 			if err != nil {
-				return errors.Wrap(err, "failed to Marshal result")
+				return nil, errors.Wrap(err, "failed to Marshal result")
 			}
 
 			encResult, err = taskKey.Encrypt(resultJSON)
 			if err != nil {
-				return errors.Wrap(err, "failed to Encrypt result")
+				return nil, errors.Wrap(err, "failed to Encrypt result")
 			}
 		}
 
-		update.EncResult = encResult
+		changes.EncResult = encResult
 	}
 
-	realUpdate, err := task.Update(update)
+	update := task.BuildUpdate(changes)
+	updatedTask, err := model.ApplyUpdateToTask(task, update)
 	if err != nil {
-		return errors.Wrap(err, "failed to task.Update")
+		return nil, errors.Wrap(err, "failed to ApplyUpdateToTask")
 	}
 
 	req := &service.UpdateTaskRequest{
-		Update:  &realUpdate,
+		Update:  update,
 		Session: r.localAuth.ActiveSession.Session,
 	}
 
 	if _, err := r.client.UpdateTask(context.Background(), req); err != nil {
-		return errors.Wrap(err, "failed to UpdateTask")
+		return nil, errors.Wrap(err, "failed to UpdateTask")
 	}
 
-	return nil
+	return updatedTask, nil
 }
 
 func signedAuthHashAttempt(keypair *simplcrypto.KeyPair, joinCode string) (*simplcrypto.Signature, int64, error) {

@@ -5,6 +5,7 @@ import (
 	"net"
 	"time"
 
+	simplcrypto "github.com/cohix/simplcrypto"
 	log "github.com/cohix/simplog"
 	"github.com/pkg/errors"
 	"github.com/taask/taask-server/auth"
@@ -86,48 +87,43 @@ func (rs *RunnerService) RegisterRunner(req *RegisterRunnerRequest, stream Runne
 
 	for {
 		task := <-tasksChan
+		var updatedTask *model.Task
 
-		update := model.TaskUpdate{
-			Status:     model.TaskStatusQueued,
-			RunnerUUID: runner.UUID,
-		}
+		changes := model.TaskChanges{Status: model.TaskStatusQueued, RunnerUUID: runner.UUID}
 
 		// if uuid is "", then it's a heartbeat
 		if task.UUID != "" {
-			runnerEncKey, err := rs.Manager.EncryptTaskKeyForRunner(runner.UUID, task.Meta.MasterEncTaskKey)
+			masterEncKey := task.GetEncTaskKey(rs.Manager.GetMasterRunnerPubKey().KID)
+
+			runnerEncKey, err := rs.Manager.EncryptTaskKeyForRunner(runner.UUID, masterEncKey)
 			if err != nil {
 				log.LogError(errors.Wrap(err, "failed to ReEncryptTaskKey"))
 				continue
 			}
 
-			update.RunnerEncTaskKey = runnerEncKey
+			changes.AddedEncTaskKeys = []*simplcrypto.Message{runnerEncKey}
 
-			var updateErr error
-			update, updateErr = task.Update(update)
+			log.LogInfo(fmt.Sprintf("sending task %s to runner %s", task.UUID, runner.UUID))
 
-			if updateErr != nil {
-				log.LogError(errors.Wrap(updateErr, "RegisterRunner failed to task.Update"))
+			updatedTask, err = rs.Manager.UpdateTask(task.BuildUpdate(changes))
+			if err != nil {
+				log.LogError(errors.Wrap(err, "failed to UpdateTask"))
 				continue
 			}
 
-			log.LogInfo(fmt.Sprintf("sending task %s to runner %s", task.UUID, runner.UUID))
 		} else {
+			updatedTask = task
 			log.LogInfo(fmt.Sprintf("sending runner %s heartbeat", runner.UUID))
 		}
 
-		if err := stream.Send(task); err != nil {
+		if err := stream.Send(updatedTask); err != nil {
 			log.LogError(errors.Wrap(err, "failed to stream.Send"))
 
 			if task.UUID != "" {
-				rs.Manager.UpdateTask(update) // persist the queued update so that the task goes waiting -> queued -> retrying
 				log.LogInfo(fmt.Sprintf("task %s is dead, a retry worker should be started for it", task.UUID))
 			}
 
 			break
-		}
-
-		if task.UUID != "" {
-			rs.Manager.UpdateTask(update)
 		}
 	}
 
@@ -148,7 +144,7 @@ func (rs *RunnerService) UpdateTask(ctx context.Context, req *UpdateTaskRequest)
 		return &Empty{}, nil
 	}
 
-	rs.Manager.UpdateTask(*req.Update)
+	rs.Manager.UpdateTask(req.Update)
 
 	return &Empty{}, nil
 }

@@ -118,12 +118,13 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:f5604545d8c345163e0d9e8b87790f84ed5d2711cec3b37ac2672a2544452cea"
+  digest = "1:8f4722b8a3f902e5874637de3a4b4c7fa9dddea68f24cc12cda72d8cd4323f97"
   name = "github.com/taask/taask-server"
   packages = [
     "auth",
     "brain",
     "config",
+    "keyservice",
     "metrics",
     "model",
     "model/validator",
@@ -135,7 +136,7 @@
     "update",
   ]
   pruneopts = "UT"
-  revision = "d7f2dfa0eefbca2dacc49351ee04507635e732fa"
+  revision = "ad3858aa93889b2bf4ddb559ae12fa992e8f3a32"
 
 [[projects]]
   branch = "master"
